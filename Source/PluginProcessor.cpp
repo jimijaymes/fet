@@ -119,12 +119,11 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
    if(!clean){
     // Rev F and G share the later push-pull Class AB output topology.
     // Rev G differs primarily in its transformerless differential input.
-    // Input gain drives the physical signal level through every colour stage.
-    // The gain-reduction cell attenuates the output amplifier feed, but its
-    // saturation drive partly follows the pre-GR input level as on hardware.
-    // The separate FET Drive remains a colour-only offset at 50% neutral.
-    const float preGRDriveRecovery=db(juce::jmin(12.f,gr*.45f));
-    const float ampDrive=(revision==0?1.9f:1.4f)*(allButtons?1.35f:1.f)*colourGain*preGRDriveRecovery;
+    // Hardware-style ordering: input level sets detector and input-stage
+    // saturation; FET attenuation then determines the actual signal feeding
+    // the output amplifier and transformer. No makeup/recovery is inserted
+    // before these nonlinear stages. FET Drive remains colour-only.
+    const float ampDrive=(revision==0?1.9f:1.4f)*(allButtons?1.35f:1.f)*colourGain;
     const float ampBias=revision==0?.095f:(revision==1?.035f:.020f);
     s.ampBias=biasPole*s.ampBias+(1-biasPole)*std::abs(coloured);
     const float bias=ampBias*juce::jmax(0.f,drive-.5f)*2.f*s.ampBias;
@@ -147,11 +146,13 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
      coloured-=.02f*juce::jmin(1.f,std::abs(s.outputFlux))*(coloured-s.outputHigh);
     }
    }
-   // Gentle, bounded gain-reduction compensation; independent of colour Drive.
+   // Post-output-stage makeup only: cannot affect amplifier/transformer saturation.
    const float targetMakeup=juce::jlimit(0.f,9.f,gr*.65f);
    const float mc=tc(targetMakeup>s.makeupDb?.18f:.50f,sampleRate);
    s.makeupDb=mc*s.makeupDb+(1.f-mc)*targetMakeup;
-   const float wet=coloured*db(s.makeupDb);
+   const float postStageMakeup=db(s.makeupDb);
+   const float wet=coloured*postStageMakeup;
+   // Output trim is the final gain stage, after output transformer and makeup.
    samples[i]=(wet*mix+dry*(1.f-mix))*output;
   }
  }
