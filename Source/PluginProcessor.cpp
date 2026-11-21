@@ -21,7 +21,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FETProcessor::layout(){
  f("input","Input (dB)",-24,24,0);f("output","Output (dB)",-24,24,0);f("drive","FET Drive (%)",0,100,25);f("mix","Mix (%)",0,100,100);
  f("attack","Attack (clockwise faster)",0,100,50);f("release","Release (clockwise faster)",0,100,55);
  p.add(std::make_unique<C>(juce::ParameterID{"revision",1},"Revision",juce::StringArray{"Rev A","Rev F","Rev G"},1));
- p.add(std::make_unique<C>(juce::ParameterID{"ratio",1},"Ratio",juce::StringArray{"4:1","8:1","12:1","20:1"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"ratio",1},"Ratio",juce::StringArray{"4:1","8:1","12:1","20:1","ALL BUTTONS IN"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"timing",1},"Timing",juce::StringArray{"1176 Classic","Extended"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"knee",1},"Knee",juce::StringArray{"1176-style","LA-2A-inspired","SSL G Bus-inspired"},0));
  p.add(std::make_unique<B>(juce::ParameterID{"clean",1},"Clean (bypass harmonic modelling)",false));
@@ -42,9 +42,12 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
  const auto v=[&](const char* id){return *parameters.getRawParameterValue(id);};
  const float input=db(v("input")),output=db(v("output")),drive=v("drive")*.01f,mix=v("mix")*.01f;
  const int revision=juce::jlimit(0,2,(int)v("revision"));
- const int ratioChoice=juce::jlimit(0,3,(int)v("ratio"));
+ const int ratioChoice=juce::jlimit(0,4,(int)v("ratio"));
+ const bool allButtons=ratioChoice==4;
  const float ratios[4]={4,8,12,20};
- const float ratio=ratios[ratioChoice];
+ // All-buttons mode deliberately has its own nonlinear transfer curve,
+ // not a fictitious 36:1 or other fixed ratio.
+ const float ratio=ratios[allButtons?3:ratioChoice];
  const bool extended=v("timing")>.5f,clean=v("clean")>.5f,linked=v("linkIron")>.5f;
  const int inModel=linked?revision:juce::jlimit(0,3,(int)v("inputIron"));
  const int outModel=linked?revision:juce::jlimit(0,3,(int)v("outputIron"));
@@ -94,11 +97,19 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
    const float k=mag>s.env?ac:rc;
    s.env=k*s.env+(1.f-k)*mag;
    const float level=juce::Decibels::gainToDecibels(juce::jmax(s.env,1e-8f),-160.f);
-   const float gr=kneeGain(level+18.f,ratio,width);
+   float gr=kneeGain(level+18.f,ratio,width);
+   if(allButtons){
+    // Inspired by the 1176 all-ratios-in interaction: irregular knee,
+    // stronger gain reduction and additional envelope-dependent movement.
+    const float over=level+18.f;
+    const float push=juce::jmax(0.f,over);
+    gr=kneeGain(over,12.f,11.f)+.20f*push*push/(12.f+push);
+    gr=juce::jlimit(0.f,48.f,gr);
+   }
    totalGR+=gr;
    coloured*=db(-gr);
    if(!clean){
-    const float ampDrive=revision==0?1.9f:(revision==1?1.4f:1.22f);
+    const float ampDrive=(revision==0?1.9f:(revision==1?1.4f:1.22f))*(allButtons?1.35f:1.f);
     const float ampBias=revision==0?.095f:(revision==1?.035f:.020f);
     s.ampBias=biasPole*s.ampBias+(1-biasPole)*std::abs(coloured);
     const float bias=ampBias*drive*s.ampBias;
