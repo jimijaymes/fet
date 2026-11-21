@@ -117,19 +117,26 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
    totalGR+=gr;
    coloured*=db(-gr);
    if(!clean){
-    const float ampDrive=(revision==0?1.9f:(revision==1?1.4f:1.08f))*(allButtons?1.35f:1.f)*colourGain;
+    // Rev F and G share the later push-pull Class AB output topology.
+    // Rev G differs primarily in its transformerless differential input.
+    const float ampDrive=(revision==0?1.9f:1.4f)*(allButtons?1.35f:1.f)*colourGain;
     const float ampBias=revision==0?.095f:(revision==1?.035f:.020f);
     s.ampBias=biasPole*s.ampBias+(1-biasPole)*std::abs(coloured);
     const float bias=ampBias*juce::jmax(0.f,drive-.5f)*2.f*s.ampBias;
     const float z=coloured*ampDrive+bias;
-    coloured=(std::tanh(z)-std::tanh(bias))/juce::jmax(.01f,ampDrive);
+    const float ampSaturated=(std::tanh(z)-std::tanh(bias))/juce::jmax(.01f,ampDrive);
+    // The F/G push-pull amplifier is cleaner than the Rev A Class A circuit.
+    // Preserve the linear path and mix only a small amount of nonlinear colour.
+    const float ampColour=revision==0?1.f:.20f;
+    coloured=coloured*(1.f-ampColour)+ampSaturated*ampColour;
     s.ampMemory=ampPole*s.ampMemory+(1-ampPole)*coloured;
-    coloured-=(revision==0?.075f:(revision==1?.035f:.012f))*juce::jmax(0.f,drive-.5f)*2.f*(coloured-s.ampMemory);
+    coloured-=(revision==0?.075f:.025f)*juce::jmax(0.f,drive-.5f)*2.f*(coloured-s.ampMemory);
     if(outModel!=3){
      s.outputLow=outputLowPole*s.outputLow+(1-outputLowPole)*coloured;
      s.outputFlux=outputFluxPole*s.outputFlux+(1-outputFluxPole)*s.outputLow;
-     const float strength=outModel==0?.16f:(outModel==2?.055f:.09f);
-     const float d=outModel==0?1.75f:(outModel==2?1.22f:1.45f);
+     // Both Rev F and Rev G use the B11148-style output transformer.
+     const float strength=outModel==0?.16f:.065f;
+     const float d=outModel==0?1.75f:1.35f;
      coloured+=strength*(std::tanh(d*s.outputLow)/d-s.outputLow);
      s.outputHigh=outputHighPole*s.outputHigh+(1-outputHighPole)*coloured;
      coloured-=.02f*juce::jmin(1.f,std::abs(s.outputFlux))*(coloured-s.outputHigh);
