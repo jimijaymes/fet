@@ -31,6 +31,7 @@ FETEditor::FETEditor(FETProcessor& p):AudioProcessorEditor(p),processor(p){
  for(size_t i=0;i<choices.size();++i){
   auto& k=choices[i];
   for(int j=0;j<4;++j)if(options[i][j])k.combo.addItem(options[i][j],j+1);
+  if(i==1)k.combo.addItem("ALL BUTTONS IN",5);
   k.combo.setColour(juce::ComboBox::backgroundColourId,juce::Colour(0xff303c45));
   k.combo.setColour(juce::ComboBox::textColourId,cream);
   k.combo.setColour(juce::ComboBox::outlineColourId,i>=4?cyan:gold);
