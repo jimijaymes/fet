@@ -27,7 +27,7 @@ public:
 private:
  static juce::AudioProcessorValueTreeState::ParameterLayout layout();
  struct State {
-  float env=0,scHPx=0,scHPy=0,scLow=0,scBand=0;
+  float env=0,scHPx=0,scHPy=0,scLow=0,scBand=0,makeupDb=0;
   float inputLow=0,inputFlux=0,inputHigh=0;
   float ampBias=0,ampMemory=0;
   float outputLow=0,outputFlux=0,outputHigh=0;
