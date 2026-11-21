@@ -99,7 +99,9 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
     flux=leak*flux+(1.f-leak)*ac*(140.f/juce::jmax(10.f,hp[model]));
     // Neutral FET Drive is equivalent to unity drive in Saturator.
     const float stageDrive=colourGain;
-    const float character=outputStage?.55f:.45f;
+    // Rev A has the more coloured early input/output voicing; F/G share
+    // the later output iron but G omits input iron entirely.
+    const float character=outputStage?(model==6?.72f:.48f):(revision==0?.70f:.42f);
     const float magneticField=flux*magnetDrive[model]*stageDrive*.22f;
     const float coreDist=(std::tanh(magneticField)-magneticField)*(.04f+.15f*character);
     const float ampGain=stageDrive*(.65f+amplifierDrive[model]*character);
