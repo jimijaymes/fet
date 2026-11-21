@@ -119,7 +119,12 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
    if(!clean){
     // Rev F and G share the later push-pull Class AB output topology.
     // Rev G differs primarily in its transformerless differential input.
-    const float ampDrive=(revision==0?1.9f:1.4f)*(allButtons?1.35f:1.f)*colourGain;
+    // Input gain drives the physical signal level through every colour stage.
+    // The gain-reduction cell attenuates the output amplifier feed, but its
+    // saturation drive partly follows the pre-GR input level as on hardware.
+    // The separate FET Drive remains a colour-only offset at 50% neutral.
+    const float preGRDriveRecovery=db(juce::jmin(12.f,gr*.45f));
+    const float ampDrive=(revision==0?1.9f:1.4f)*(allButtons?1.35f:1.f)*colourGain*preGRDriveRecovery;
     const float ampBias=revision==0?.095f:(revision==1?.035f:.020f);
     s.ampBias=biasPole*s.ampBias+(1-biasPole)*std::abs(coloured);
     const float bias=ampBias*juce::jmax(0.f,drive-.5f)*2.f*s.ampBias;
