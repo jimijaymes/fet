@@ -46,14 +46,14 @@ FETEditor::FETEditor(FETProcessor& p):AudioProcessorEditor(p),processor(p){
  cleanAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"clean",clean);
  linkAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"linkIron",linkIron);
  linkIron.onClick=[this]{updateIron();};
- updateIron();setSize(1120,650);startTimerHz(20);
+ updateIron();setSize(1120,735);startTimerHz(20);
 }
 void FETEditor::updateIron(){
  const bool enabled=!linkIron.getToggleState();
  for(size_t i=4;i<6;++i){choices[i].combo.setEnabled(enabled);choices[i].label.setEnabled(enabled);}
 }
 void FETEditor::paint(juce::Graphics& g){
- g.fillAll(bg);g.setColour(juce::Colour(0xff27323b));g.fillRoundedRectangle(12,12,1096,626,12);
+ g.fillAll(bg);g.setColour(juce::Colour(0xff27323b));g.fillRoundedRectangle(12,12,1096,711,12);
  g.setColour(gold);g.setFont(juce::Font(juce::FontOptions(31,juce::Font::bold)));
  g.drawText("FET  /  REVISION LAB",35,22,700,46,juce::Justification::centredLeft);
  g.setColour(cream);g.setFont(juce::Font(juce::FontOptions(13)));
@@ -62,8 +62,8 @@ void FETEditor::paint(juce::Graphics& g){
  g.setColour(cyan);g.drawRoundedRectangle(28,356,1064,174,9,1.4f);
  g.setFont(juce::Font(juce::FontOptions(14,juce::Font::bold)));g.drawText("SIDECHAIN / DETECTOR ONLY",44,357,420,24,juce::Justification::centredLeft);
  g.setColour(cream);g.setFont(juce::Font(juce::FontOptions(12)));
- g.drawText("ATTACK / RELEASE: CLOCKWISE = FASTER  •  EXTENDED: 20 us–30 ms / 25–1650 ms",38,579,1010,23,juce::Justification::centredLeft);
- g.drawText("GAIN REDUCTION: "+juce::String(processor.gainReduction.load(),1)+" dB",38,603,400,22,juce::Justification::centredLeft);
+ g.drawText("ATTACK / RELEASE: CLOCKWISE = FASTER  •  EXTENDED: 20 us–30 ms / 25–1650 ms",38,676,1010,23,juce::Justification::centredLeft);
+ g.drawText("GAIN REDUCTION: "+juce::String(processor.gainReduction.load(),1)+" dB",38,700,400,22,juce::Justification::centredLeft);
 }
 void FETEditor::resized(){
  for(int i=0;i<10;++i){
@@ -79,6 +79,6 @@ void FETEditor::resized(){
   const int yy=i<3?254:540;
   k.label.setBounds(x,yy,165,18);k.combo.setBounds(x,yy+20,185,27);
  }
- clean.setBounds(760,260,285,30);
- linkIron.setBounds(760,540,285,30);
+ clean.setBounds(760,310,285,30);
+ linkIron.setBounds(760,620,285,30);
 }
