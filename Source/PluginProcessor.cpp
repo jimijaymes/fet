@@ -77,20 +77,46 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
    const float hot=dry;
    float coloured=hot;
    const float driven=hot*colourGain;
+   // Ported from Saturator's transformer model: separate core low/high
+   // memory, leaky flux integration, magnetic nonlinear branch and
+   // independently normalised amplifier branch. Rev G is transformerless.
+   const auto transformer=[&](float x,int model,bool outputStage)->float {
+    if(model==0)return x;
+    const float hp[]={0,22,12,24,9,28,14,18};
+    const float lp[]={0,19000,17500,21000,22000,15500,18500,19500};
+    const float asym[]={0,.035f,.085f,.075f,.045f,.02f,.095f,.045f};
+    const float magnetDrive[]={0,.65f,1.1f,.8f,1.3f,.7f,1.35f,1.0f};
+    const float amplifierDrive[]={0,.25f,.9f,.8f,1.1f,.2f,1.0f,1.15f};
+    float& low=outputStage?s.outputCoreLow:s.inputCoreLow;
+    float& high=outputStage?s.outputCoreHigh:s.inputCoreHigh;
+    float& flux=outputStage?s.outputFlux:s.inputFlux;
+    const float lowPole=pole(hp[model],sampleRate);
+    const float highPole=pole(lp[model],sampleRate);
+    low=lowPole*low+(1.f-lowPole)*x;
+    high=highPole*high+(1.f-highPole)*x;
+    const float ac=x-low;
+    const float leak=pole(hp[model]*.55f,sampleRate);
+    flux=leak*flux+(1.f-leak)*ac*(140.f/juce::jmax(10.f,hp[model]));
+    // Neutral FET Drive is equivalent to unity drive in Saturator.
+    const float stageDrive=colourGain;
+    const float character=outputStage?.55f:.45f;
+    const float magneticField=flux*magnetDrive[model]*stageDrive*.22f;
+    const float coreDist=(std::tanh(magneticField)-magneticField)*(.04f+.15f*character);
+    const float ampGain=stageDrive*(.65f+amplifierDrive[model]*character);
+    const float ampBias=asym[model];
+    const float ampY=(std::tanh(x*ampGain+ampBias)-std::tanh(ampBias))/juce::jmax(.1f,ampGain);
+    const float ampBlend=.14f+.36f*character;
+    const float topLoss=(x-high)*(.015f+.065f*character);
+    return (1.f-ampBlend)*x+ampBlend*ampY+coreDist-topLoss;
+   };
    if(!clean&&inModel!=3){
-    if(inModel!=2){
-     s.inputLow=inputLowPole*s.inputLow+(1-inputLowPole)*driven;
-     s.inputFlux=inputFluxPole*s.inputFlux+(1-inputFluxPole)*s.inputLow;
-     const float strength=inModel==0?.17f:.10f;
-     const float d=(inModel==0?2.1f:1.6f)*(1.f+.25f*juce::jmin(2.f,std::abs(s.inputFlux)));
-     coloured+=colourTrim*strength*(std::tanh(d*s.inputLow)/d-s.inputLow);
-     s.inputHigh=inputHighPole*s.inputHigh+(1-inputHighPole)*coloured;
-     coloured-=.015f*juce::jmin(1.f,std::abs(s.inputFlux))*(coloured-s.inputHigh);
-    }else {
-     // Rev G differential input is the cleanest option: no soft clipper.
-     // Leave the signal linear here; output amplifier adds its own colour.
-     coloured=hot;
-    }
+    if(inModel==2){
+     // Rev G: differential transformerless input, no magnetic core.
+     // A lightly nonlinear differential amplifier, not a hard clipper.
+     const float gDrive=colourGain;
+     const float z=hot*gDrive;
+     coloured=.94f*hot+.06f*std::tanh(z)/juce::jmax(.1f,gDrive);
+    }else coloured=transformer(hot,5,false);
    }
    float detected=hpAlpha*(s.scHPy+coloured-s.scHPx);
    s.scHPx=coloured;s.scHPy=detected;
@@ -135,16 +161,8 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
     coloured=coloured*(1.f-ampColour)+ampSaturated*ampColour;
     s.ampMemory=ampPole*s.ampMemory+(1-ampPole)*coloured;
     coloured-=(revision==0?.075f:.025f)*juce::jmax(0.f,drive-.5f)*2.f*(coloured-s.ampMemory);
-    if(outModel!=3){
-     s.outputLow=outputLowPole*s.outputLow+(1-outputLowPole)*coloured;
-     s.outputFlux=outputFluxPole*s.outputFlux+(1-outputFluxPole)*s.outputLow;
-     // Both Rev F and Rev G use the B11148-style output transformer.
-     const float strength=outModel==0?.16f:.065f;
-     const float d=outModel==0?1.75f:1.35f;
-     coloured+=strength*(std::tanh(d*s.outputLow)/d-s.outputLow);
-     s.outputHigh=outputHighPole*s.outputHigh+(1-outputHighPole)*coloured;
-     coloured-=.02f*juce::jmin(1.f,std::abs(s.outputFlux))*(coloured-s.outputHigh);
-    }
+    if(outModel!=3)
+     coloured=transformer(coloured,outModel==0?6:7,true);
    }
    // Post-output-stage makeup only: cannot affect amplifier/transformer saturation.
    const float targetMakeup=juce::jlimit(0.f,9.f,gr*.65f);
