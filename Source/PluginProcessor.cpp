@@ -18,7 +18,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FETProcessor::layout(){
  using F=juce::AudioParameterFloat;using C=juce::AudioParameterChoice;using B=juce::AudioParameterBool;
  juce::AudioProcessorValueTreeState::ParameterLayout p;
  auto f=[&](const char* id,const char* name,float lo,float hi,float def){p.add(std::make_unique<F>(juce::ParameterID{id,1},name,juce::NormalisableRange<float>(lo,hi,.1f),def));};
- f("input","Input (dB)",-24,24,0);f("output","Output (dB)",-24,24,0);f("drive","FET Drive (%)",0,100,25);f("mix","Mix (%)",0,100,100);
+ f("input","Input (dB)",-24,24,0);f("output","Output (dB)",-24,24,0);f("drive","FET Drive (%)",0,100,50);f("mix","Mix (%)",0,100,100);
  f("attack","Attack (clockwise faster)",0,100,50);f("release","Release (clockwise faster)",0,100,55);
  p.add(std::make_unique<C>(juce::ParameterID{"revision",1},"Revision",juce::StringArray{"Rev A","Rev F","Rev G"},1));
  p.add(std::make_unique<C>(juce::ParameterID{"ratio",1},"Ratio",juce::StringArray{"4:1","8:1","12:1","20:1","ALL BUTTONS IN"},0));
@@ -62,7 +62,10 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
  const float g=std::tan(juce::MathConstants<float>::pi*juce::jmin(scFreq,(float)sampleRate*.45f)/(float)sampleRate);
  const float q=juce::jmax(.2f,scQ),r=1.f/q;
  const float bell=db(scGain)-1.f;
- const float pre=db(drive*36.f),post=db(-drive*36.f);
+ // Drive is a colour-only offset. 50% is unity/neutral; detector and gain reduction are independent.
+ const float colourDb=(drive-.5f)*24.f;
+ const float colourGain=db(colourDb);
+ const float colourTrim=db(-colourDb);
  const float inputLowPole=pole(110,sampleRate),inputFluxPole=pole(35,sampleRate),inputHighPole=pole(12000,sampleRate);
  const float outputLowPole=pole(155,sampleRate),outputFluxPole=pole(43,sampleRate),outputHighPole=pole(12500,sampleRate);
  const float ampPole=pole(8500,sampleRate),biasPole=pole(24,sampleRate);
@@ -71,18 +74,23 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
   auto& s=states[(size_t)c];auto* samples=buffer.getWritePointer(c);
   for(int i=0;i<n;++i){
    const float dry=samples[i]*input;
-   const float hot=dry*pre;
+   const float hot=dry;
    float coloured=hot;
+   const float driven=hot*colourGain;
    if(!clean&&inModel!=3){
     if(inModel!=2){
-     s.inputLow=inputLowPole*s.inputLow+(1-inputLowPole)*coloured;
+     s.inputLow=inputLowPole*s.inputLow+(1-inputLowPole)*driven;
      s.inputFlux=inputFluxPole*s.inputFlux+(1-inputFluxPole)*s.inputLow;
      const float strength=inModel==0?.17f:.10f;
      const float d=(inModel==0?2.1f:1.6f)*(1.f+.25f*juce::jmin(2.f,std::abs(s.inputFlux)));
-     coloured+=strength*(std::tanh(d*s.inputLow)/d-s.inputLow);
+     coloured+=colourTrim*strength*(std::tanh(d*s.inputLow)/d-s.inputLow);
      s.inputHigh=inputHighPole*s.inputHigh+(1-inputHighPole)*coloured;
      coloured-=.015f*juce::jmin(1.f,std::abs(s.inputFlux))*(coloured-s.inputHigh);
-    }else coloured=std::tanh(coloured*.99f)/.99f;
+    }else {
+     // Rev G differential input is the cleanest option: no soft clipper.
+     // Leave the signal linear here; output amplifier adds its own colour.
+     coloured=hot;
+    }
    }
    float detected=hpAlpha*(s.scHPy+coloured-s.scHPx);
    s.scHPx=coloured;s.scHPy=detected;
@@ -109,25 +117,29 @@ void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffe
    totalGR+=gr;
    coloured*=db(-gr);
    if(!clean){
-    const float ampDrive=(revision==0?1.9f:(revision==1?1.4f:1.22f))*(allButtons?1.35f:1.f);
+    const float ampDrive=(revision==0?1.9f:(revision==1?1.4f:1.08f))*(allButtons?1.35f:1.f)*colourGain;
     const float ampBias=revision==0?.095f:(revision==1?.035f:.020f);
     s.ampBias=biasPole*s.ampBias+(1-biasPole)*std::abs(coloured);
-    const float bias=ampBias*drive*s.ampBias;
+    const float bias=ampBias*juce::jmax(0.f,drive-.5f)*2.f*s.ampBias;
     const float z=coloured*ampDrive+bias;
-    coloured=(std::tanh(z)-std::tanh(bias))/ampDrive;
+    coloured=(std::tanh(z)-std::tanh(bias))/juce::jmax(.01f,ampDrive);
     s.ampMemory=ampPole*s.ampMemory+(1-ampPole)*coloured;
-    coloured-=(revision==0?.075f:.035f)*drive*(coloured-s.ampMemory);
+    coloured-=(revision==0?.075f:(revision==1?.035f:.012f))*juce::jmax(0.f,drive-.5f)*2.f*(coloured-s.ampMemory);
     if(outModel!=3){
      s.outputLow=outputLowPole*s.outputLow+(1-outputLowPole)*coloured;
      s.outputFlux=outputFluxPole*s.outputFlux+(1-outputFluxPole)*s.outputLow;
-     const float strength=outModel==0?.16f:.09f;
-     const float d=outModel==0?1.75f:1.45f;
+     const float strength=outModel==0?.16f:(outModel==2?.055f:.09f);
+     const float d=outModel==0?1.75f:(outModel==2?1.22f:1.45f);
      coloured+=strength*(std::tanh(d*s.outputLow)/d-s.outputLow);
      s.outputHigh=outputHighPole*s.outputHigh+(1-outputHighPole)*coloured;
      coloured-=.02f*juce::jmin(1.f,std::abs(s.outputFlux))*(coloured-s.outputHigh);
     }
    }
-   const float wet=coloured*post;
+   // Gentle, bounded gain-reduction compensation; independent of colour Drive.
+   const float targetMakeup=juce::jlimit(0.f,9.f,gr*.65f);
+   const float mc=tc(targetMakeup>s.makeupDb?.18f:.50f,sampleRate);
+   s.makeupDb=mc*s.makeupDb+(1.f-mc)*targetMakeup;
+   const float wet=coloured*db(s.makeupDb);
    samples[i]=(wet*mix+dry*(1.f-mix))*output;
   }
  }
