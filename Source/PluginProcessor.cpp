@@ -39,7 +39,7 @@ void FETProcessor::prepareToPlay(double sr,int){sampleRate=sr;states={};setLaten
 void FETProcessor::processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffer&){
  juce::ScopedNoDenormals noDenormals;
  const int n=buffer.getNumSamples(),channels=juce::jmin(2,buffer.getNumChannels());
- const auto v=[&](const char* id){return *parameters.getRawParameterValue(id);};
+ const auto v=[&](const char* id)->float{return parameters.getRawParameterValue(id)->load(std::memory_order_relaxed);};
  const float input=db(v("input")),output=db(v("output")),drive=v("drive")*.01f,mix=v("mix")*.01f;
  const int revision=juce::jlimit(0,2,(int)v("revision"));
  const int ratioChoice=juce::jlimit(0,4,(int)v("ratio"));
