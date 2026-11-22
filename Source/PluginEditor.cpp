@@ -14,7 +14,7 @@ FETEditor::FETEditor(FETProcessor& p):AudioProcessorEditor(p),processor(p){
   k.slider.setColour(juce::Slider::textBoxOutlineColourId,juce::Colours::transparentBlack);
   k.label.setText(labels[i],juce::dontSendNotification);
   k.label.setColour(juce::Label::textColourId,cream);
-  k.label.setJustificationType(juce::Justification::centred);
+  k.label.setJustificationType(juce::Justification::centred);k.label.setMinimumHorizontalScale(0.68f);
   addAndMakeVisible(k.slider);addAndMakeVisible(k.label);
   k.attachment=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.parameters,ids[i],k.slider);
  }
@@ -37,7 +37,7 @@ FETEditor::FETEditor(FETProcessor& p):AudioProcessorEditor(p),processor(p){
   k.combo.setColour(juce::ComboBox::outlineColourId,i>=4?cyan:gold);
   k.label.setText(labelsC[i],juce::dontSendNotification);
   k.label.setColour(juce::Label::textColourId,cream);
-  k.label.setJustificationType(juce::Justification::centred);
+  k.label.setJustificationType(juce::Justification::centred);k.label.setMinimumHorizontalScale(0.68f);
   addAndMakeVisible(k.combo);addAndMakeVisible(k.label);
   k.attachment=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(p.parameters,idsC[i],k.combo);
  }
