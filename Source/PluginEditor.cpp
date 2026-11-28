@@ -71,14 +71,14 @@ void FETEditor::resized(){
   const int x=i<6?42+i*171:155+(i-6)*212;
   const int y=i<6?131:389;
   auto& k=dials[(size_t)i];
-  k.slider.setBounds(x,y,120,105);k.label.setBounds(x-8,y+103,136,23);
+  k.slider.setBounds(x,y,120,105);k.label.setBounds(x-8,y+109,136,23);
  }
  for(int i=0;i<6;++i){
   const int x=45+(i%3)*350,y=i<3?255:465;
   auto& k=choices[(size_t)i];
   // Sidechain row stays reserved for the detector knobs.
   const int yy=i<3?254:540;
-  k.label.setBounds(x,yy,165,18);k.combo.setBounds(x,yy+20,185,27);
+  k.label.setBounds(x,yy,285,20);k.combo.setBounds(x,yy+22,285,29);
  }
  clean.setBounds(760,310,285,30);
  linkIron.setBounds(760,620,285,30);
